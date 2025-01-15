@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>划消测验</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 35px);
+            gap: 2px;
+            justify-content: center;
+            margin: 20px auto;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .cell {
+            width: 35px;
+            height: 35px;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            font-size: 18px;
+            background-color: white;
+            user-select: none;
+        }
+
+        .cell.crossed {
+            color: #ccc;
+        }
+
+        .cell.crossed::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #ff0000;
+            transform: rotate(-45deg);
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 10px;
+        }
+
+        .button-started {
+            background-color: #ff4444 !important;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .timer {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .score-item {
+            margin: 10px 0;
+            padding: 5px;
+            background-color: #fff;
+            border-radius: 3px;
+        }
+
+        .status-text {
+            color: #ff4444;
+            font-weight: bold;
+            display: none;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>划消测验</h1>
+        <p>规则：请找出并点击所有的奇数（1、3、5、7、9）</p>
+        <p id="statusText" class="status-text">测验已开始，请立即开始划掉奇数！时间正在计时...</p>
+        <p class="timer">用时：<span id="time">0:00</span></p>
+        <button id="startBtn">开始测验</button>
+        
+        <div class="game-grid" id="gameGrid"></div>
+        
+        <div class="results" id="results">
+            <h2>测验结束！</h2>
+            <div id="scoreDetails"></div>
+            <button id="restartBtn">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        let gameGrid = [];
+        let isGameRunning = false;
+        let timer;
+        let correctCount = 0;    // 正确划掉的奇数个数
+        let wrongCount = 0;      // 错误划掉的非奇数个数
+        let missedCount = 0;     // 漏划的奇数个数
+        let startTime;           // 记录开始时间
+        let totalOddNumbers = 0; // 总共的奇数个数
+        let timerInterval;
+
+        function isOdd(num) {
+            return num % 2 === 1;
+        }
+
+        function initializeGame() {
+            gameGrid = [];
+            const gridElement = document.getElementById('gameGrid');
+            gridElement.innerHTML = '';
+            totalOddNumbers = 0;
+            
+            for (let i = 0; i < 10; i++) {
+                const row = [];
+                for (let j = 0; j < 10; j++) {
+                    const num = Math.floor(Math.random() * 9) + 1;
+                    if (isOdd(num)) totalOddNumbers++;
+                    row.push(num);
+                    
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.textContent = num;
+                    cell.onclick = () => handleCellClick(i, j);
+                    gridElement.appendChild(cell);
+                }
+                gameGrid.push(row);
+            }
+        }
+
+        function handleCellClick(row, col) {
+            if (!isGameRunning) return;
+            
+            const cell = document.querySelectorAll('.cell')[row * 10 + col];
+            if (cell.classList.contains('crossed')) return;
+            
+            const number = gameGrid[row][col];
+            if (isOdd(number)) {
+                correctCount++;
+            } else {
+                wrongCount++;
+            }
+            cell.classList.add('crossed');
+
+            // 检查是否所有奇数都已经被找到
+            checkCompletion();
+        }
+
+        function checkCompletion() {
+            // 当正确点击数量等于总奇数数量时，结束游戏
+            if (correctCount >= totalOddNumbers) {
+                endGame();
+            }
+        }
+
+        function updateTimer() {
+            const currentTime = new Date();
+            const timeUsed = currentTime - startTime;
+            const seconds = Math.floor(timeUsed / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            document.getElementById('time').textContent = 
+                `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function calculateScore(timeUsed) {
+            missedCount = totalOddNumbers - correctCount;
+            
+            // 计算准确度 A=(c-w)/(c+o)
+            const A = (correctCount - wrongCount) / (correctCount + missedCount);
+            
+            // 计算注意力集中指数 E=100*A/t
+            const timeInMinutes = timeUsed / (1000 * 60);
+            const E = 100 * A / timeInMinutes;
+            
+            return {
+                accuracy: A,
+                attentionIndex: E,
+                missed: missedCount,
+                timeUsed: timeUsed
+            };
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            clearInterval(timerInterval);
+            
+            // 重置按钮状态
+            const startBtn = document.getElementById('startBtn');
+            startBtn.classList.remove('button-started');
+            startBtn.textContent = '开始测验';
+            document.getElementById('statusText').style.display = 'none';
+            
+            const endTime = new Date();
+            const timeUsed = endTime - startTime;
+            
+            const results = calculateScore(timeUsed);
+            
+            const scoreDetails = document.getElementById('scoreDetails');
+            scoreDetails.innerHTML = `
+                <div class="score-item">总共的奇数数量：${totalOddNumbers}</div>
+                <div class="score-item">正确划消数：${correctCount}</div>
+                <div class="score-item">错误划消数：${wrongCount}</div>
+                <div class="score-item">漏划数量：${results.missed}</div>
+                <div class="score-item">用时：${(timeUsed/1000).toFixed(2)}秒</div>
+                <div class="score-item">准确度：${(results.accuracy * 100).toFixed(2)}%</div>
+                <div class="score-item">注意力集中指数：${results.attentionIndex.toFixed(2)}</div>
+            `;
+            
+            document.getElementById('results').style.display = 'block';
+        }
+
+        document.getElementById('startBtn').onclick = () => {
+            isGameRunning = true;
+            correctCount = 0;
+            wrongCount = 0;
+            missedCount = 0;
+            
+            // 更新按钮状态和显示提示文字
+            const startBtn = document.getElementById('startBtn');
+            startBtn.classList.add('button-started');
+            startBtn.textContent = '测验进行中...';
+            document.getElementById('statusText').style.display = 'block';
+            
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('time').textContent = '0:00';
+            clearInterval(timerInterval);
+            initializeGame();
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+        };
+
+        document.getElementById('restartBtn').onclick = () => {
+            document.getElementById('startBtn').click();
+        };
+    </script>
+</body>
+</html>
